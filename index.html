@@ -402,7 +402,14 @@ document.addEventListener('input', e => {
 document.addEventListener('click', async e => {
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.id === 'createRound') { t.disabled = true; await createRound(); t.disabled = false; return; }
+  if (t.id === 'createRound') {
+    t.disabled = true;
+    $('startErr').textContent = '';
+    try { await createRound(); }
+    catch (err) { $('startErr').textContent = '作成に失敗しました: ' + (err.code || err.message); }
+    t.disabled = false;
+    return;
+  }
   if (t.id === 'joinRound') {
     const code = $('joinCode').value.trim().toUpperCase();
     if (!code) return;
