@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ゴルフスコア・ダブルペリア</title>
+<style>
+  :root {
+    --green: #2e7d32;
+    --green-dark: #1b5e20;
+    --bg: #f3f6f1;
+    --card: #fff;
+    --line: #d5ddd2;
+    --text: #222;
+    --hidden: #fff3c4;
+    --minus: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    padding-bottom: 40px;
+  }
+  header {
+    background: var(--green); color: #fff; padding: 14px 16px;
+    font-size: 18px; font-weight: bold;
+  }
+  main { max-width: 600px; margin: 0 auto; padding: 12px; }
+  section {
+    background: var(--card); border-radius: 10px; padding: 12px;
+    margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  h2 { margin: 0 0 10px; font-size: 16px; color: var(--green-dark); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  input[type=text], input[type=number] {
+    font-size: 16px; padding: 8px; border: 1px solid var(--line);
+    border-radius: 6px; width: 100%;
+  }
+  button {
+    font-size: 14px; padding: 8px 12px; border: none; border-radius: 6px;
+    background: var(--green); color: #fff; cursor: pointer;
+  }
+  button.sub { background: #78909c; }
+  button.danger { background: #b71c1c; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 2px; text-align: center; min-width: 52px; }
+  th { background: #e8f0e6; font-weight: 600; padding: 6px 2px; }
+  td.hole { background: #e8f0e6; font-weight: bold; min-width: 34px; }
+  td.hidden, th.hidden { background: var(--hidden); }
+  td input { width: 100%; border: none; text-align: center; font-size: 16px; padding: 8px 0; background: transparent; }
+  td.tot { font-weight: bold; background: #f7f7f7; }
+  .par-btn { background: none; color: var(--text); border: 1px solid var(--line); padding: 4px 0; width: 100%; font-size: 14px; }
+  .hide-btn { background: none; color: var(--text); border: 1px solid var(--line); width: 100%; padding: 4px 0; font-size: 12px; }
+  .hide-btn.on { background: #f9a825; color: #fff; border-color: #f9a825; }
+  .result td, .result th { padding: 8px 4px; }
+  .rank1 { background: #fff8e1; font-weight: bold; }
+  .note { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.5; }
+  .neg { color: var(--minus); }
+  label.small { font-size: 13px; color: #555; }
+</style>
+</head>
+<body>
+<header>⛳ ゴルフスコア ＆ ダブルペリア</header>
+<main>
+
+  <section>
+    <h2>1. ラウンド情報</h2>
+    <div class="row">
+      <div style="flex:1;min-width:140px"><label class="small">コース名</label>
+        <input type="text" id="course" placeholder="例）○○カントリー"></div>
+      <div style="flex:1;min-width:140px"><label class="small">日付</label>
+        <input type="text" id="date" placeholder="2026-10-31"></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label class="small">ペリアの係数</label>
+        <input type="number" id="coef" step="0.1" value="1.5"></div>
+      <div style="flex:1"><label class="small">ハンデ率</label>
+        <input type="number" id="rate" step="0.05" value="0.8"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. プレーヤー</h2>
+    <div id="players"></div>
+    <div class="row">
+      <button id="addPlayer">＋ プレーヤー追加</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. パー設定・隠しホール（12ホール）</h2>
+    <div class="note" style="margin:0 0 8px">パー数をタップで 3→4→5 と切替。「隠し」をタップで対象ホールを選択（黄色）。</div>
+    <div class="tablewrap">
+      <table id="parTable"></table>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="randomHidden">ランダムで12ホール選ぶ</button>
+      <span id="hiddenCount" class="note"></span>
+    </div>
+    <div class="note">ランダム選択はパー3×2・パー4×8・パー5×2（合計パー48）を基本にします。該当ホール数が足りない場合は残りから補います。</div>
+  </section>
+
+  <section>
+    <h2>4. スコア入力</h2>
+    <div class="tablewrap">
+      <table id="scoreTable"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. ダブルペリア結果</h2>
+    <div class="tablewrap">
+      <table id="resultTable" class="result"></table>
+    </div>
+    <div class="note" id="formula"></div>
+  </section>
+
+  <section>
+    <div class="row">
+      <button class="danger" id="reset">すべてリセット</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const KEY = 'golf-double-peria-v1';
+const HOLES = 18;
+
+function defaultState() {
+  return {
+    course: '', date: new Date().toISOString().slice(0, 10),
+    coef: 1.5, rate: 0.8,
+    par: [4,4,3,5,4,4,3,4,5, 4,4,3,5,4,4,3,4,5],
+    hidden: [],
+    players: [{ name: 'プレーヤー1', scores: Array(HOLES).fill('') },
+             { name: 'プレーヤー2', scores: Array(HOLES).fill('') }]
+  };
+}
+
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY)) || defaultState(); }
+catch (e) { state = defaultState(); }
+
+const $ = id => document.getElementById(id);
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sum = a => a.reduce((x, y) => x + y, 0);
+const fmt = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+function pickRandomHidden() {
+  const shuffled = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+  const idx = [...Array(HOLES).keys()];
+  const want = { 3: 2, 4: 8, 5: 2 };
+  const chosen = [];
+  for (const p of [3, 4, 5]) {
+    const pool = shuffled(idx.filter(i => state.par[i] === p));
+    chosen.push(...pool.slice(0, want[p]));
+  }
+  const rest = shuffled(idx.filter(i => !chosen.includes(i)));
+  while (chosen.length < 12) chosen.push(rest.shift());
+  state.hidden = chosen.sort((a, b) => a - b);
+}
+
+function renderPlayers() {
+  $('players').innerHTML = state.players.map((p, i) => `
+    <div class="row">
+      <input type="text" data-name="${i}" value="${esc(p.name)}" style="flex:1">
+      ${state.players.length > 1 ? `<button class="sub" data-del="${i}">削除</button>` : ''}
+    </div>`).join('');
+}
+
+function renderPar() {
+  const isH = i => state.hidden.includes(i);
+  const hdr = '<tr><th>H</th>' + [...Array(HOLES).keys()].map(i =>
+    `<th class="${isH(i) ? 'hidden' : ''}">${i + 1}</th>`).join('') + '</tr>';
+  const parRow = '<tr><td class="hole">Par</td>' + state.par.map((p, i) =>
+    `<td><button class="par-btn" data-par="${i}">${p}</button></td>`).join('') + '</tr>';
+  const hidRow = '<tr><td class="hole">隠し</td>' + [...Array(HOLES).keys()].map(i =>
+    `<td><button class="hide-btn ${isH(i) ? 'on' : ''}" data-hide="${i}">${isH(i) ? '●' : '○'}</button></td>`).join('') + '</tr>';
+  $('parTable').innerHTML = hdr + parRow + hidRow;
+  const n = state.hidden.length;
+  $('hiddenCount').textContent = `選択中: ${n}/12` + (n !== 12 ? '（12ホール選んでください）' : '');
+}
+
+function holeRows(from, to) {
+  const isH = i => state.hidden.includes(i);
+  let html = '<tr><th>H</th><th>Par</th>' +
+    state.players.map(p => `<th>${esc(p.name)}</th>`).join('') + '</tr>';
+  for (let i = from; i < to; i++) {
+    html += `<tr><td class="hole ${isH(i) ? 'hidden' : ''}">${i + 1}</td><td>${state.par[i]}</td>` +
+      state.players.map((p, pi) =>
+        `<td class="${isH(i) ? 'hidden' : ''}"><input type="number" inputmode="numeric" min="1" max="20" data-score="${pi},${i}" value="${p.scores[i]}"></td>`
+      ).join('') + '</tr>';
+  }
+  const parSub = sum(state.par.slice(from, to));
+  html += `<tr><td class="hole">${from === 0 ? 'OUT' : 'IN'}</td><td class="tot">${parSub}</td>` +
+    state.players.map((p, pi) => `<td class="tot" data-sub="${pi},${from}">${subtotal(p, from, to)}</td>`).join('') + '</tr>';
+  return html;
+}
+
+function subtotal(p, from, to) {
+  const v = p.scores.slice(from, to).map(Number).filter(n => n > 0);
+  return v.length ? sum(v) : '-';
+}
+
+function renderScores() {
+  $('scoreTable').innerHTML = holeRows(0, 9) +
+    '<tr><td colspan="' + (2 + state.players.length) + '" style="border:none;height:10px"></td></tr>' +
+    holeRows(9, 18);
+}
+
+function calc(p) {
+  const complete = p.scores.every(s => Number(s) > 0);
+  if (!complete || state.hidden.length !== 12) return null;
+  const gross = sum(p.scores.map(Number));
+  const hiddenSum = sum(state.hidden.map(i => Number(p.scores[i])));
+  const hiddenPar = sum(state.hidden.map(i => state.par[i]));
+  const totalPar = sum(state.par);
+  const raw = hiddenSum * Number(state.coef) - totalPar;
+  const hc = Math.max(0, raw * Number(state.rate));
+  return { gross, hiddenSum, hiddenPar, hc, net: gross - hc };
+}
+
+function renderResult() {
+  const rows = state.players.map(p => ({ p, r: calc(p) }));
+  const ranked = rows.filter(x => x.r).sort((a, b) => a.r.net - b.r.net);
+  let html = '<tr><th>順位</th><th>名前</th><th>グロス</th><th>隠し12H</th><th>ハンデ</th><th>ネット</th></tr>';
+  const rankOf = x => ranked.findIndex(y => y.r.net === x.r.net) + 1;
+  for (const x of rows) {
+    if (x.r) {
+      const rk = rankOf(x);
+      html += `<tr class="${rk === 1 ? 'rank1' : ''}"><td>${rk}</td><td>${esc(x.p.name)}</td><td>${x.r.gross}</td>` +
+        `<td>${x.r.hiddenSum}</td><td>${fmt(Math.round(x.r.hc * 10) / 10)}</td>` +
+        `<td>${fmt(Math.round(x.r.net * 10) / 10)}</td></tr>`;
+    } else {
+      html += `<tr><td>-</td><td>${esc(x.p.name)}</td><td colspan="4" class="note">18ホール入力＋隠し12ホール選択で計算</td></tr>`;
+    }
+  }
+  $('resultTable').innerHTML = html;
+  $('formula').innerHTML =
+    `ハンデ ＝ (隠し12ホールの合計 × ${state.coef} − 全ホールのパー合計${sum(state.par)}) × ${state.rate}<br>` +
+    `ネット ＝ グロス − ハンデ（小さいほど上位。ハンデがマイナスになる場合は0）`;
+}
+
+function renderAll() {
+  $('course').value = state.course;
+  $('date').value = state.date;
+  $('coef').value = state.coef;
+  $('rate').value = state.rate;
+  renderPlayers(); renderPar(); renderScores(); renderResult();
+}
+
+// イベント
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'course') state.course = t.value;
+  else if (t.id === 'date') state.date = t.value;
+  else if (t.id === 'coef') { state.coef = t.value; renderResult(); }
+  else if (t.id === 'rate') { state.rate = t.value; renderResult(); }
+  else if (t.dataset.name !== undefined) {
+    state.players[+t.dataset.name].name = t.value; renderResult();
+  } else if (t.dataset.score !== undefined) {
+    const [pi, h] = t.dataset.score.split(',').map(Number);
+    state.players[pi].scores[h] = t.value;
+    const sub = h < 9 ? 0 : 9;
+    document.querySelector(`[data-sub="${pi},${sub}"]`).textContent = subtotal(state.players[pi], sub, sub + 9);
+    renderResult();
+  }
+  save();
+});
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.id === 'addPlayer') {
+    if (state.players.length >= 6) return;
+    state.players.push({ name: `プレーヤー${state.players.length + 1}`, scores: Array(HOLES).fill('') });
+    renderAll();
+  } else if (t.dataset.del !== undefined) {
+    state.players.splice(+t.dataset.del, 1); renderAll();
+  } else if (t.dataset.par !== undefined) {
+    const i = +t.dataset.par;
+    state.par[i] = state.par[i] === 5 ? 3 : state.par[i] + 1;
+    renderPar(); renderScores(); renderResult();
+  } else if (t.dataset.hide !== undefined) {
+    const i = +t.dataset.hide;
+    const k = state.hidden.indexOf(i);
+    if (k >= 0) state.hidden.splice(k, 1);
+    else state.hidden.push(i);
+    state.hidden.sort((a, b) => a - b);
+    renderPar(); renderScores(); renderResult();
+  } else if (t.id === 'randomHidden') {
+    pickRandomHidden(); renderPar(); renderScores(); renderResult();
+  } else if (t.id === 'reset') {
+    if (confirm('入力内容をすべて消去します。よろしいですか？')) {
+      state = defaultState(); renderAll();
+    }
+  }
+  save();
+});
+
+renderAll();
+</script>
+</body>
+</html>
